@@ -1,38 +1,52 @@
-// services/walletPasswordService.js
-const bcrypt = require("bcrypt");
-const jwt = require("jsonwebtoken");
+// services/walletPasswordService.js - MetaMask-like Implementation
 const crypto = require("crypto");
+const jwt = require("jsonwebtoken");
 
-// In-memory wallet store (in production, use database)
+// In-memory wallet store
 const wallets = new Map();
-
-// JWT secret
 const JWT_SECRET = process.env.JWT_SECRET || "wallet-secret-key-change-in-production";
 
-// Encryption key for wallet data
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || crypto.randomBytes(32);
-
-// Encrypt wallet data
-const encrypt = (text) => {
-  const iv = crypto.randomBytes(16);
-  const cipher = crypto.createCipher('aes-256-cbc', ENCRYPTION_KEY);
-  let encrypted = cipher.update(text, 'utf8', 'hex');
-  encrypted += cipher.final('hex');
-  return iv.toString('hex') + ':' + encrypted;
+// ✅ METAMASK-LIKE: Derive encryption key from user's password
+const deriveKeyFromPassword = (password, salt) => {
+  // Use PBKDF2 like MetaMask (100,000 iterations for security)
+  return crypto.pbkdf2Sync(password, salt, 100000, 32, 'sha256');
 };
 
-// Decrypt wallet data
-const decrypt = (encryptedData) => {
-  const parts = encryptedData.split(':');
-  const iv = Buffer.from(parts[0], 'hex');
-  const encryptedText = parts[1];
-  const decipher = crypto.createDecipher('aes-256-cbc', ENCRYPTION_KEY);
-  let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
-  decrypted += decipher.final('utf8');
-  return decrypted;
+// ✅ METAMASK-LIKE: Encrypt using password-derived key
+const encryptWithPassword = (text, password) => {
+  const salt = crypto.randomBytes(16); // Random salt for each wallet
+  const key = deriveKeyFromPassword(password, salt);
+  const iv = crypto.randomBytes(12); // 12 bytes for GCM
+  
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const encrypted = Buffer.concat([cipher.update(text, 'utf8'), cipher.final()]);
+  const authTag = cipher.getAuthTag();
+  
+  // Return: salt:iv:encrypted:authTag
+  return salt.toString('hex') + ':' + iv.toString('hex') + ':' + 
+         encrypted.toString('hex') + ':' + authTag.toString('hex');
 };
 
-// Simple password validation
+// ✅ METAMASK-LIKE: Decrypt using password-derived key
+const decryptWithPassword = (encryptedData, password) => {
+  const [saltHex, ivHex, encryptedHex, authTagHex] = encryptedData.split(':');
+  
+  const salt = Buffer.from(saltHex, 'hex');
+  const iv = Buffer.from(ivHex, 'hex');
+  const encrypted = Buffer.from(encryptedHex, 'hex');
+  const authTag = Buffer.from(authTagHex, 'hex');
+  
+  // Derive the same key using password + salt
+  const key = deriveKeyFromPassword(password, salt);
+  
+  const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+  decipher.setAuthTag(authTag);
+  
+  const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]);
+  return decrypted.toString('utf8');
+};
+
+// Password validation (same as your code)
 const validatePassword = (password) => {
   const minLength = 6;
   const errors = [];
@@ -45,7 +59,6 @@ const validatePassword = (password) => {
     errors.push(`Password must be at least ${minLength} characters long`);
   }
 
-  // Optional: Add more security requirements
   const hasNumbers = /\d/.test(password);
   const hasLetters = /[a-zA-Z]/.test(password);
   
@@ -62,54 +75,22 @@ const validatePassword = (password) => {
   };
 };
 
-// Calculate password strength
 const calculatePasswordStrength = (password) => {
   if (!password) return "None";
-  
   let score = 0;
-  
   if (password.length >= 6) score += 1;
   if (password.length >= 8) score += 1;
   if (/[a-z]/.test(password)) score += 1;
   if (/[A-Z]/.test(password)) score += 1;
   if (/[0-9]/.test(password)) score += 1;
   if (/[^A-Za-z0-9]/.test(password)) score += 1;
-
+  
   if (score <= 2) return "Weak";
   if (score <= 4) return "Medium";
   return "Strong";
 };
 
-// Hash password
-const hashPassword = async (password) => {
-  const saltRounds = 10;
-  return await bcrypt.hash(password, saltRounds);
-};
-
-// Verify password
-const verifyPassword = async (password, hashedPassword) => {
-  return await bcrypt.compare(password, hashedPassword);
-};
-
-// Generate access token
-const generateAccessToken = (walletAddress) => {
-  return jwt.sign(
-    { walletAddress, timestamp: Date.now() },
-    JWT_SECRET,
-    { expiresIn: "1h" }
-  );
-};
-
-// Verify access token
-const verifyAccessToken = (token) => {
-  try {
-    return jwt.verify(token, JWT_SECRET);
-  } catch (error) {
-    return null;
-  }
-};
-
-// NEW: Import existing wallet with password protection
+// ✅ METAMASK-LIKE: Import wallet with password-based encryption
 const importWalletWithPassword = async (walletData, password) => {
   try {
     const { mnemonic, privateKey, address } = walletData;
@@ -132,19 +113,15 @@ const importWalletWithPassword = async (walletData, password) => {
       };
     }
 
-    // Hash password
-    const hashedPassword = await hashPassword(password);
+    // ✅ ENCRYPT WITH PASSWORD (like MetaMask)
+    const encryptedMnemonic = encryptWithPassword(mnemonic, password);
+    const encryptedPrivateKey = encryptWithPassword(privateKey, password);
 
-    // Encrypt sensitive data
-    const encryptedMnemonic = encrypt(mnemonic);
-    const encryptedPrivateKey = encrypt(privateKey);
-
-    // Store wallet with encrypted data
+    // Store wallet with encrypted data (NO password hash needed!)
     const walletRecord = {
       address: address,
       encryptedMnemonic: encryptedMnemonic,
       encryptedPrivateKey: encryptedPrivateKey,
-      hashedPassword: hashedPassword,
       createdAt: new Date(),
       lastAccess: null,
       accessCount: 0,
@@ -169,55 +146,86 @@ const importWalletWithPassword = async (walletData, password) => {
   }
 };
 
-// MODIFIED: Create wallet with password (now called import)
-const createWalletWithPassword = async (walletData, password) => {
-  return await importWalletWithPassword(walletData, password);
-};
-
-// Unlock wallet with password
-const unlockWallet = async (address, password) => {
+// ✅ METAMASK-LIKE: Unlock wallet by trying to decrypt with password
+const unlockWallet = async (addressOrPassword, password) => {
   try {
-    // Find wallet
-    const wallet = wallets.get(address);
-    if (!wallet) {
-      return {
-        success: false,
-        message: "Wallet not found. Please import your wallet first."
-      };
+    let wallet;
+    let address;
+    let userPassword;
+
+    // Support both modes: unlockWallet(password) or unlockWallet(address, password)
+    if (password === undefined) {
+      // Password-only mode: try to decrypt all wallets
+      userPassword = addressOrPassword;
+      
+      for (const [addr, walletData] of wallets.entries()) {
+        try {
+          // Try to decrypt with this password
+          decryptWithPassword(walletData.encryptedMnemonic, userPassword);
+          wallet = walletData;
+          address = addr;
+          break; // Success! Found the right wallet
+        } catch (error) {
+          // Wrong password for this wallet, continue searching
+          continue;
+        }
+      }
+      
+      if (!wallet) {
+        return {
+          success: false,
+          message: "Incorrect password or no wallet found"
+        };
+      }
+    } else {
+      // Address + password mode
+      address = addressOrPassword;
+      userPassword = password;
+      wallet = wallets.get(address);
+      
+      if (!wallet) {
+        return {
+          success: false,
+          message: "Wallet not found. Please import your wallet first."
+        };
+      }
     }
 
-    // Verify password
-    const isPasswordValid = await verifyPassword(password, wallet.hashedPassword);
-    if (!isPasswordValid) {
+    // ✅ DECRYPT WITH PASSWORD (like MetaMask)
+    try {
+      const mnemonic = decryptWithPassword(wallet.encryptedMnemonic, userPassword);
+      const privateKey = decryptWithPassword(wallet.encryptedPrivateKey, userPassword);
+
+      // Update access info
+      wallet.lastAccess = new Date();
+      wallet.accessCount += 1;
+
+      // Generate access token
+      const accessToken = jwt.sign(
+        { walletAddress: address, timestamp: Date.now() },
+        JWT_SECRET,
+        { expiresIn: "1h" }
+      );
+
+      return {
+        success: true,
+        message: "Wallet unlocked successfully",
+        wallet: {
+          address: address,
+          mnemonic: mnemonic,
+          privateKey: privateKey
+        },
+        accessToken: accessToken,
+        lastAccess: wallet.lastAccess,
+        accessCount: wallet.accessCount
+      };
+
+    } catch (decryptError) {
       return {
         success: false,
         message: "Incorrect password"
       };
     }
-
-    // Decrypt sensitive data
-    const mnemonic = decrypt(wallet.encryptedMnemonic);
-    const privateKey = decrypt(wallet.encryptedPrivateKey);
-
-    // Update access info
-    wallet.lastAccess = new Date();
-    wallet.accessCount += 1;
-
-    // Generate access token
-    const accessToken = generateAccessToken(address);
-
-    return {
-      success: true,
-      message: "Wallet unlocked successfully",
-      wallet: {
-        address: wallet.address,
-        mnemonic: mnemonic,
-        privateKey: privateKey
-      },
-      accessToken: accessToken,
-      lastAccess: wallet.lastAccess,
-      accessCount: wallet.accessCount
-    };
 
   } catch (error) {
     return {
@@ -228,7 +236,7 @@ const unlockWallet = async (address, password) => {
   }
 };
 
-// Change wallet password
+// ✅ METAMASK-LIKE: Change password by re-encrypting with new password
 const changeWalletPassword = async (address, currentPassword, newPassword) => {
   try {
     const wallet = wallets.get(address);
@@ -239,9 +247,12 @@ const changeWalletPassword = async (address, currentPassword, newPassword) => {
       };
     }
 
-    // Verify current password
-    const isCurrentPasswordValid = await verifyPassword(currentPassword, wallet.hashedPassword);
-    if (!isCurrentPasswordValid) {
+    // Try to decrypt with current password
+    let mnemonic, privateKey;
+    try {
+      mnemonic = decryptWithPassword(wallet.encryptedMnemonic, currentPassword);
+      privateKey = decryptWithPassword(wallet.encryptedPrivateKey, currentPassword);
+    } catch (error) {
       return {
         success: false,
         message: "Current password is incorrect"
@@ -258,9 +269,9 @@ const changeWalletPassword = async (address, currentPassword, newPassword) => {
       };
     }
 
-    // Hash new password
-    const hashedNewPassword = await hashPassword(newPassword);
-    wallet.hashedPassword = hashedNewPassword;
+    // Re-encrypt with new password
+    wallet.encryptedMnemonic = encryptWithPassword(mnemonic, newPassword);
+    wallet.encryptedPrivateKey = encryptWithPassword(privateKey, newPassword);
 
     return {
       success: true,
@@ -277,14 +288,11 @@ const changeWalletPassword = async (address, currentPassword, newPassword) => {
   }
 };
 
-// Get wallet info (without sensitive data)
+// Other helper functions (same as your code)
 const getWalletInfo = (address) => {
   const wallet = wallets.get(address);
   if (!wallet) {
-    return {
-      success: false,
-      message: "Wallet not found"
-    };
+    return { success: false, message: "Wallet not found" };
   }
 
   return {
@@ -299,17 +307,9 @@ const getWalletInfo = (address) => {
   };
 };
 
-// Check if wallet exists
-const walletExists = (address) => {
-  return wallets.has(address);
-};
+const walletExists = (address) => wallets.has(address);
+const isWalletProtected = (address) => wallets.has(address);
 
-// NEW: Check if address needs password (is imported)
-const isWalletProtected = (address) => {
-  return wallets.has(address);
-};
-
-// Middleware to authenticate wallet access
 const authenticateWallet = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -321,19 +321,18 @@ const authenticateWallet = (req, res, next) => {
     });
   }
 
-  const decoded = verifyAccessToken(token);
-  if (!decoded) {
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.walletAddress = decoded.walletAddress;
+    next();
+  } catch (error) {
     return res.status(403).json({
       success: false,
       message: 'Invalid or expired token'
     });
   }
-
-  req.walletAddress = decoded.walletAddress;
-  next();
 };
 
-// Get all wallets (for debugging)
 const getAllWallets = () => {
   const walletList = [];
   for (const [address, wallet] of wallets.entries()) {
@@ -350,7 +349,6 @@ const getAllWallets = () => {
 
 module.exports = {
   validatePassword,
-  createWalletWithPassword,
   importWalletWithPassword,
   unlockWallet,
   changeWalletPassword,
@@ -358,5 +356,7 @@ module.exports = {
   walletExists,
   isWalletProtected,
   authenticateWallet,
-  getAllWallets
+  getAllWallets,
+  // Legacy alias
+  createWalletWithPassword: importWalletWithPassword
 };

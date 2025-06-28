@@ -20,4 +20,15 @@ const generateWallet = () => {
   return { mnemonic, privateKey, address };
 };
 
-module.exports = { generateWallet };
+const generateWalletFromMnemonic = (mnemonic) => {
+  const seed = bip39.mnemonicToSeedSync(mnemonic);
+  const hdWallet = hdkey.fromMasterSeed(seed);
+  const key = hdWallet.derivePath("m/44'/60'/0'/0/0");
+  const wallet = key.getWallet();
+  const privateKey = wallet.getPrivateKeyString();
+  const address = wallet.getAddressString();
+  return { mnemonic, privateKey, address };
+};
+
+module.exports = { generateWallet, generateWalletFromMnemonic };
+

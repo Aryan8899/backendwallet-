@@ -1,6 +1,6 @@
 const axios = require("axios");
 //const axios = require("axios");
-const ALCHEMY = process.env.ALCHEMY_ETH_MAINNET;  // Ensure you are using the Mainnet endpoint
+const ALCHEMY = process.env.ETH_RPC_URL;  // Ensure you are using the Mainnet endpoint
 
 const getETHBalance = async (address) => {
   try {

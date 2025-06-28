@@ -1,6 +1,8 @@
 const express = require("express");
 const router = express.Router();
 const { getXRPBalance } = require("../services/xrpService");
+const { generateWallet, generateWalletFromMnemonic } = require("../services/walletService");
+
 
 router.get("/balance/:address", async (req, res) => {
   const address = req.params.address;

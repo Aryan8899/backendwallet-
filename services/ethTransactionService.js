@@ -1,7 +1,7 @@
 
 // Updated ethTransactionService.js - Simplified for Latest Transactions
 const axios = require("axios");
-const ALCHEMY = process.env.ALCHEMY_ETH_MAINNET;
+const ALCHEMY = process.env.ETH_RPC_URL;
 
 const getETHTransactions = async (address, limit = 10) => {
   try {

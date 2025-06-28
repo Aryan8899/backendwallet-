@@ -3,7 +3,7 @@ const router = express.Router();
 
 const { getTokenPrice, getTxHistory, getETHBalance } = require("../services/ethService");
 const { getBNBBalance } = require("../services/bscService");
-const { generateWallet } = require("../services/walletService");
+const { generateWallet, generateWalletFromMnemonic } = require("../services/walletService");
 const {
   validatePassword,
   createWalletWithPassword,
@@ -16,6 +16,66 @@ const {
   authenticateWallet,
   getAllWallets
 } = require("../services/walletPasswordService");
+
+// ✅ NEW: Import wallet from mnemonic only
+// ✅ NEW: Import wallet from mnemonic only
+router.post("/import-mnemonic", async (req, res) => {
+  try {
+    const { mnemonic, password } = req.body;
+
+    if (!mnemonic || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Mnemonic phrase and password are required"
+      });
+    }
+
+    // Validate mnemonic format (basic check)
+    const words = mnemonic.trim().split(/\s+/);
+    if (words.length !== 12 && words.length !== 24) {
+      return res.status(400).json({
+        success: false,
+        message: "Mnemonic must be 12 or 24 words"
+      });
+    }
+
+    // Generate wallet data from mnemonic
+    let walletData;
+    try {
+      walletData = generateWalletFromMnemonic(mnemonic);
+    } catch (error) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid mnemonic phrase",
+        error: error.message
+      });
+    }
+
+    // Import the wallet with password
+    const result = await importWalletWithPassword(walletData, password);
+    
+    if (result.success) {
+      res.status(201).json({
+        ...result,
+        wallet: {
+          address: walletData.address,
+          privateKey: walletData.privateKey,  // ✅ NOW RETURNING PRIVATE KEY
+          mnemonic: walletData.mnemonic       // ✅ ALSO RETURNING MNEMONIC FOR CONFIRMATION
+        },
+        message: "Wallet imported successfully from mnemonic"
+      });
+    } else {
+      res.status(400).json(result);
+    }
+
+  } catch (err) {
+    res.status(500).json({ 
+      success: false, 
+      message: "Failed to import wallet from mnemonic",
+      error: err.message 
+    });
+  }
+});
 
 // STEP 1: Generate a new wallet (mnemonic, private key, address)
 router.post("/generate", async (req, res) => {
@@ -36,7 +96,7 @@ router.post("/generate", async (req, res) => {
   }
 });
 
-// STEP 2: Import/Set password for existing wallet
+// STEP 2: Import/Set password for existing wallet (complete data)
 router.post("/import", async (req, res) => {
   try {
     const { mnemonic, privateKey, address, password } = req.body;
@@ -44,7 +104,7 @@ router.post("/import", async (req, res) => {
     if (!mnemonic || !privateKey || !address || !password) {
       return res.status(400).json({
         success: false,
-        message: "Mnemonic, private key, address, and password are all required"
+        message: "Mnemonic, private key, address, and password are all required. Use /import-mnemonic if you only have the mnemonic phrase."
       });
     }
 
@@ -71,10 +131,6 @@ router.post("/login", async (req, res) => {
   try {
     const { address, password } = req.body;
 
-    // Support both modes:
-    // Mode 1: Only password (searches all wallets)
-    // Mode 2: Address + password (traditional)
-    
     if (!password) {
       return res.status(400).json({
         success: false,
@@ -327,19 +383,19 @@ router.post("/validate-password", (req, res) => {
 
 // Get wallet balance
 router.get("/balance/:address", async (req, res) => {
-    const address = req.params.address;
+  const address = req.params.address;
 
-    try {
-      const [eth, bnb] = await Promise.all([
-        getETHBalance(address),
-        getBNBBalance(address),
-      ]);
+  try {
+    const [eth, bnb] = await Promise.all([
+      getETHBalance(address),
+      getBNBBalance(address),
+    ]);
 
-      res.json({ eth, bnb });
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({ error: err.message });
-    }
+    res.json({ eth, bnb });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 router.get("/txs/:address", async (req, res) => {

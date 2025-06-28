@@ -15,6 +15,18 @@ const xrpRoutes = require("./routes/xrp");
 const btcRoutes = require("./routes/btc");
 const dogeBalanceRoutes = require("./routes/dogeBalance");
 const trxRoutes = require("./routes/trx");
+
+const { 
+  rpcTransactionRouter, 
+  ethRPCRouter, 
+  bscRPCRouter 
+} = require('./routes/rpcTransactions');
+
+// Import custom network routes
+const customNetworkRoutes = require('./routes/customNetwork');
+const customNetworkBalanceRoutes = require('./routes/customNetworkBalance');
+const customNetworkTransactionRoutes = require('./routes/customNetworkTransactions');
+
 // NEW: Import transaction history routes
 const btcTransactionRoutes = require('./routes/btcTransactions');
 const ethTransactionRoutes = require('./routes/ethTransactions');
@@ -22,10 +34,13 @@ const bscTransactionRoutes = require('./routes/bscTransactions');
 const trxTransactionRoutes = require('./routes/trxTransactions');
 const xrpTransactionRoutes = require('./routes/xrpTransactions');
 const dogeTransactionRoutes = require('./routes/dogeTransactions');
+
+console.log("📁 Routes loaded successfully");
+
 // Import NEW custom network routes
-const customNetworkRoutes = require('./routes/customNetwork');
-const customNetworkBalanceRoutes = require('./routes/customNetworkBalance');
-const customNetworkTransactionRoutes = require('./routes/customNetworkTransactions');
+// const customNetworkRoutes = require('./routes/customNetwork');
+// const customNetworkBalanceRoutes = require('./routes/customNetworkBalance');
+// const customNetworkTransactionRoutes = require('./routes/customNetworkTransactions');
 
 
 
@@ -82,6 +97,13 @@ app.use("/api/wallet/trx", trxRoutes);
 //       res.status(500).json({ error: `Error connecting to the RPC URL: ${err.message}` });
 //     }
 //   });
+
+// NEW: RPC-based transaction routes (recommended)
+app.use('/api/rpc', rpcTransactionRouter);
+
+// NEW: Network-specific RPC routes (backward compatible)
+app.use('/api/eth-rpc', ethRPCRouter);
+app.use('/api/bsc-rpc', bscRPCRouter);
 
   
 app.use('/api/btc', btcTransactionRoutes);
