@@ -8,7 +8,7 @@ router.get("/transactions/:network/:address", async (req, res) => {
   try {
     const { network, address } = req.params;
     const {
-      limit = 10,
+      limit = 20,
       startBlock = 0,
       endBlock = "latest",
       includeTokenTransfers = true
@@ -208,7 +208,7 @@ const ethRouter = express.Router();
 
 ethRouter.get("/transactions/:address", async (req, res) => {
   const { address } = req.params;
-  const limit = parseInt(req.query.limit) || 10;
+  const limit = parseInt(req.query.limit);
   const includeTokenTransfers = req.query.includeTokenTransfers !== "false";
 
   try {
@@ -245,7 +245,7 @@ const bscRouter = express.Router();
 
 bscRouter.get("/transactions/:address", async (req, res) => {
   const { address } = req.params;
-  const limit = parseInt(req.query.limit) || 10;
+  const limit = parseInt(req.query.limit);
   const includeTokenTransfers = req.query.includeTokenTransfers !== "false";
 
   try {

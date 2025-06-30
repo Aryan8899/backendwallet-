@@ -19,6 +19,7 @@
     "ethers": "^6.14.4",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
-    "speakeasy": "^2.0.0"
+    "speakeasy": "^2.0.0",
+    "xrpl": "^4.3.0"
   }
 }

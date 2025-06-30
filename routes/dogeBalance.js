@@ -34,4 +34,42 @@ router.get("/balance/:address", async (req, res) => {
   }
 });
 
+// ✅ GET Dogecoin Transaction Info (validate txid)
+// ✅ GET Dogecoin Transaction History
+router.get("/transactions/:address", async (req, res) => {
+  const address = req.params.address;
+
+  if (!isValidDogeAddress(address)) {
+    return res.status(400).json({ error: "Invalid Dogecoin address format" });
+  }
+
+  try {
+    const response = await axios.get(`${BLOCKCYPHER_API}/addrs/${address}`, {
+      params: {
+        token: API_TOKEN,
+        limit: 50  // optional: number of txs
+      }
+    });
+
+    const txs = response.data.txrefs || [];
+
+    const transactions = txs.map(tx => ({
+      tx_hash: tx.tx_hash,
+      block_height: tx.block_height,
+      confirmed: tx.confirmed,
+      value: tx.value / 1e8,
+      confirmations: tx.confirmations
+    }));
+
+    res.json({
+      address,
+      txCount: transactions.length,
+      transactions
+    });
+  } catch (err) {
+    console.error("Error fetching DOGE transaction history:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

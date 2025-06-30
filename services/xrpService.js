@@ -1,16 +1,29 @@
-const axios = require('axios');
+// services/xrpService.js
+const xrpl = require("xrpl");
 
-// Function to get XRP balance from the XRPL public API
 const getXRPBalance = async (address) => {
   try {
-    const response = await axios.get(`https://data.ripple.com/v2/accounts/${address}/balances`);
-    const xrpEntry = response.data.balances.find(b => b.currency === "XRP");
+    const client = new xrpl.Client("wss://s1.ripple.com"); // Ripple Mainnet WebSocket
+    await client.connect();
 
-    const xrpBalance = parseFloat(xrpEntry?.value || 0);
-    return { symbol: "XRP", balance: xrpBalance.toFixed(6) };
-  } catch (err) {
-    console.error("Error fetching XRP balance:", err.message);
-    return { symbol: "XRP", balance: "0.000000", error: err.message };
+    const response = await client.request({
+      command: "account_info",
+      account: address,
+      ledger_index: "validated"
+    });
+
+    const drops = response.result.account_data.Balance;
+    const xrp = (parseFloat(drops) / 1_000_000).toFixed(6);
+
+    await client.disconnect();
+
+    return { symbol: "XRP", balance: xrp };
+  } catch (error) {
+    return {
+      symbol: "XRP",
+      balance: "0.000000",
+      error: error?.data?.error_message || error.message
+    };
   }
 };
 
