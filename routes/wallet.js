@@ -3,7 +3,16 @@ const router = express.Router();
 
 const { getTokenPrice, getTxHistory, getETHBalance } = require("../services/ethService");
 const { getBNBBalance } = require("../services/bscService");
-const { generateWallet, generateWalletFromMnemonic } = require("../services/walletService");
+const { 
+  generateWallet, 
+  generateWalletFromMnemonic,
+  generateMultiChainWallet,
+  generateMultiChainWalletFromMnemonic,
+  generateWalletForBlockchain,
+  getSupportedBlockchains,
+  isValidBlockchainType,
+  BLOCKCHAIN_TYPES
+} = require("../services/walletService");
 const {
   validatePassword,
   createWalletWithPassword,
@@ -17,11 +26,49 @@ const {
   getAllWallets
 } = require("../services/walletPasswordService");
 
-// ✅ NEW: Import wallet from mnemonic only
-// ✅ NEW: Import wallet from mnemonic only
-router.post("/import-mnemonic", async (req, res) => {
+// ✅ NEW: Generate multi-chain wallet
+router.post("/generate-multichain", async (req, res) => {
   try {
-    const { mnemonic, password } = req.body;
+    const { blockchains } = req.body;
+    
+    // Default to Ethereum if no blockchains specified
+    const chainsToGenerate = blockchains && Array.isArray(blockchains) 
+      ? blockchains 
+      : [BLOCKCHAIN_TYPES.ETHEREUM];
+    
+    // Validate blockchain types
+    const invalidChains = chainsToGenerate.filter(chain => !isValidBlockchainType(chain));
+    if (invalidChains.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid blockchain types: ${invalidChains.join(', ')}`,
+        supportedBlockchains: getSupportedBlockchains()
+      });
+    }
+    
+    const walletData = generateMultiChainWallet(chainsToGenerate);
+    
+    res.json({
+      success: true,
+      message: "Multi-chain wallet generated successfully",
+      mnemonic: walletData.mnemonic,
+      wallets: walletData.wallets,
+      supportedChains: walletData.supportedChains,
+      note: "Please save your mnemonic phrase securely. You can set a password to protect this wallet locally."
+    });
+  } catch (err) {
+    res.status(500).json({ 
+      success: false,
+      message: "Failed to generate multi-chain wallet",
+      error: err.message 
+    });
+  }
+});
+
+// ✅ NEW: Import multi-chain wallet from mnemonic
+router.post("/import-multichain", async (req, res) => {
+  try {
+    const { mnemonic, password, blockchains } = req.body;
 
     if (!mnemonic || !password) {
       return res.status(400).json({
@@ -30,7 +77,165 @@ router.post("/import-mnemonic", async (req, res) => {
       });
     }
 
-    // Validate mnemonic format (basic check)
+    // Validate mnemonic format
+    const words = mnemonic.trim().split(/\s+/);
+    if (words.length !== 12 && words.length !== 24) {
+      return res.status(400).json({
+        success: false,
+        message: "Mnemonic must be 12 or 24 words"
+      });
+    }
+
+    // Default to Ethereum if no blockchains specified
+    const chainsToGenerate = blockchains && Array.isArray(blockchains) 
+      ? blockchains 
+      : [BLOCKCHAIN_TYPES.ETHEREUM];
+
+    // Validate blockchain types
+    const invalidChains = chainsToGenerate.filter(chain => !isValidBlockchainType(chain));
+    if (invalidChains.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid blockchain types: ${invalidChains.join(', ')}`,
+        supportedBlockchains: getSupportedBlockchains()
+      });
+    }
+
+    // Generate multi-chain wallet data from mnemonic
+    let walletData;
+    try {
+      walletData = generateMultiChainWalletFromMnemonic(mnemonic, chainsToGenerate);
+    } catch (error) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid mnemonic phrase",
+        error: error.message
+      });
+    }
+
+    // For now, we'll import the Ethereum wallet to maintain compatibility
+    // In the future, you might want to store all wallets
+    const ethWallet = walletData.wallets[BLOCKCHAIN_TYPES.ETHEREUM];
+    if (!ethWallet || ethWallet.error) {
+      return res.status(400).json({
+        success: false,
+        message: "Failed to generate Ethereum wallet from mnemonic"
+      });
+    }
+
+    const ethWalletData = {
+      mnemonic: walletData.mnemonic,
+      privateKey: ethWallet.privateKey,
+      address: ethWallet.address
+    };
+
+    // Import the Ethereum wallet with password (for backward compatibility)
+    const result = await importWalletWithPassword(ethWalletData, password);
+    
+    if (result.success) {
+      res.status(201).json({
+        ...result,
+        wallets: walletData.wallets,
+        supportedChains: walletData.supportedChains,
+        message: "Multi-chain wallet imported successfully from mnemonic"
+      });
+    } else {
+      res.status(400).json(result);
+    }
+
+  } catch (err) {
+    res.status(500).json({ 
+      success: false, 
+      message: "Failed to import multi-chain wallet from mnemonic",
+      error: err.message 
+    });
+  }
+});
+
+// ✅ NEW: Generate wallet for specific blockchain
+router.post("/generate-blockchain/:blockchain", async (req, res) => {
+  try {
+    const { blockchain } = req.params;
+    const { mnemonic } = req.body;
+
+    if (!isValidBlockchainType(blockchain)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid blockchain type: ${blockchain}`,
+        supportedBlockchains: getSupportedBlockchains()
+      });
+    }
+
+    let walletData;
+    
+    if (mnemonic) {
+      // Generate from existing mnemonic
+      const words = mnemonic.trim().split(/\s+/);
+      if (words.length !== 12 && words.length !== 24) {
+        return res.status(400).json({
+          success: false,
+          message: "Mnemonic must be 12 or 24 words"
+        });
+      }
+      
+      try {
+        walletData = generateWalletForBlockchain(mnemonic, blockchain);
+        walletData.mnemonic = mnemonic;
+      } catch (error) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid mnemonic phrase",
+          error: error.message
+        });
+      }
+    } else {
+      // Generate new wallet for specific blockchain
+      const multiWallet = generateMultiChainWallet([blockchain]);
+      walletData = {
+        mnemonic: multiWallet.mnemonic,
+        ...multiWallet.wallets[blockchain]
+      };
+    }
+
+    res.json({
+      success: true,
+      message: `${blockchain.toUpperCase()} wallet generated successfully`,
+      wallet: walletData,
+      blockchain: blockchain
+    });
+
+  } catch (err) {
+    res.status(500).json({ 
+      success: false,
+      message: `Failed to generate ${req.params.blockchain} wallet`,
+      error: err.message 
+    });
+  }
+});
+
+// ✅ NEW: Get supported blockchains
+router.get("/blockchains", (req, res) => {
+  res.json({
+    success: true,
+    supportedBlockchains: getSupportedBlockchains(),
+    blockchainTypes: BLOCKCHAIN_TYPES,
+    message: "List of supported blockchain types"
+  });
+});
+
+// ✅ ENHANCED: Import wallet from mnemonic only (now supports multi-chain)
+router.post("/import-mnemonic", async (req, res) => {
+  try {
+    const { mnemonic, password, blockchain } = req.body;
+
+    if (!mnemonic || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Mnemonic phrase and password are required"
+      });
+    }
+
+    // Validate mnemonic format
     const words = mnemonic.trim().split(/\s+/);
     if (words.length !== 12 && words.length !== 24) {
       return res.status(400).json({
@@ -42,7 +247,14 @@ router.post("/import-mnemonic", async (req, res) => {
     // Generate wallet data from mnemonic
     let walletData;
     try {
-      walletData = generateWalletFromMnemonic(mnemonic);
+      if (blockchain && isValidBlockchainType(blockchain)) {
+        // Generate for specific blockchain
+        walletData = generateWalletForBlockchain(mnemonic, blockchain);
+        walletData.mnemonic = mnemonic;
+      } else {
+        // Default to Ethereum for backward compatibility
+        walletData = generateWalletFromMnemonic(mnemonic);
+      }
     } catch (error) {
       return res.status(400).json({
         success: false,
@@ -59,8 +271,9 @@ router.post("/import-mnemonic", async (req, res) => {
         ...result,
         wallet: {
           address: walletData.address,
-          privateKey: walletData.privateKey,  // ✅ NOW RETURNING PRIVATE KEY
-          mnemonic: walletData.mnemonic       // ✅ ALSO RETURNING MNEMONIC FOR CONFIRMATION
+          privateKey: walletData.privateKey,
+          mnemonic: walletData.mnemonic,
+          blockchain: walletData.blockchain || BLOCKCHAIN_TYPES.ETHEREUM
         },
         message: "Wallet imported successfully from mnemonic"
       });
@@ -76,6 +289,8 @@ router.post("/import-mnemonic", async (req, res) => {
     });
   }
 });
+
+// ORIGINAL ROUTES (keeping for backward compatibility)
 
 // STEP 1: Generate a new wallet (mnemonic, private key, address)
 router.post("/generate", async (req, res) => {
@@ -382,6 +597,7 @@ router.post("/validate-password", (req, res) => {
 });
 
 // Get wallet balance
+
 router.get("/balance/:address", async (req, res) => {
   const address = req.params.address;
 
