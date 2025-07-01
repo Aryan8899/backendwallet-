@@ -35,6 +35,9 @@ const trxTransactionRoutes = require('./routes/trxTransactions');
 const xrpTransactionRoutes = require('./routes/xrpTransactions');
 const dogeTransactionRoutes = require('./routes/dogeTransactions');
 
+const universalTransactionRouter = require('./routes/sendTransaction');
+
+
 console.log("📁 Routes loaded successfully");
 
 // Import NEW custom network routes
@@ -45,7 +48,7 @@ console.log("📁 Routes loaded successfully");
 
 
 // Add debugging
-console.log("📁 Routes loaded successfully");
+//console.log("📁 Routes loaded successfully");
 
 // Use routes
 app.use("/api/wallet", walletRoutes);
@@ -119,6 +122,9 @@ app.use('/api/custom-network', customNetworkRoutes);
 app.use('/api/custom-network', customNetworkBalanceRoutes);
 app.use('/api/custom-network', customNetworkTransactionRoutes);
 
+app.use('/api/transaction', universalTransactionRouter);
+
+
 app.post("/add-custom-network", async (req, res) => {
     // Redirect to new endpoint
     res.redirect(307, '/api/custom-network/add');
@@ -129,6 +135,15 @@ console.log("🛣️  Routes registered successfully");
 // Add a test route to verify server is working
 app.get("/test", (req, res) => {
   res.json({ message: "Server is working!" });
+});
+
+app.use((error, req, res, next) => {
+  console.error('Global error handler:', error);
+  res.status(500).json({
+    success: false,
+    error: 'Internal server error',
+    message: error.message
+  });
 });
 
 const PORT = process.env.PORT || 5000;
