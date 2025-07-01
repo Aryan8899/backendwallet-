@@ -5,6 +5,10 @@ const { payments } = bitcoin;
 const BIP32Factory = require("bip32").default;
 const ecc = require("tiny-secp256k1");
 const crypto = require("crypto");
+const tronweb = require("tronweb");
+const TronWeb = tronweb.TronWeb;
+
+const { encodeAccountID } = require("ripple-address-codec");
 
 // Initialize bip32 with ecc
 const bip32 = BIP32Factory(ecc);
@@ -237,7 +241,7 @@ const generateBitcoinLikeWallet = (seed, derivationPath, blockchainType) => {
   }
 };
 
-// FIXED: Generate Tron wallet (TRX)
+// FIXED: Generate Tron wallet (TRX) with proper public key formatting
 const generateTronWallet = (seed, derivationPath) => {
   try {
     // Use bip32 for proper derivation
@@ -248,8 +252,8 @@ const generateTronWallet = (seed, derivationPath) => {
       throw new Error('Failed to derive private key for Tron wallet');
     }
     
-    // FIXED: Proper hex string conversion
-    const privateKeyHex = child.privateKey.toString('hex');
+    // Private key as hex string
+    const privateKeyHex = Buffer.from(child.privateKey).toString('hex');
     
     // For public key, we need to ensure it's in the correct format
     let publicKeyBuffer = child.publicKey;
@@ -264,41 +268,48 @@ const generateTronWallet = (seed, derivationPath) => {
       }
     }
     
-    const publicKeyHex = publicKeyBuffer.toString('hex');
+    // FIXED: Convert public key buffer to proper hex string
+    const publicKeyHex = Buffer.from(publicKeyBuffer).toString('hex');
+console.log("✅ HEX:", publicKeyHex);
+
+    console.log("normal is",publicKeyBuffer)
+    console.log("the key is",publicKeyHex)
     
     // Generate Tron address from public key
-    const tronAddress = convertToTronAddress(publicKeyBuffer);
+    const tronWeb = new TronWeb({
+      fullHost: "https://api.trongrid.io"
+    });
+    
+    const tronAddress = tronWeb.address.fromPrivateKey(privateKeyHex);
     
     return {
       blockchain: BLOCKCHAIN_TYPES.TRON,
-      privateKey: '0x' + privateKeyHex,
-      publicKey: '0x' + publicKeyHex,
+      privateKey: privateKeyHex, 
+      publicKey: publicKeyHex, // FIXED: Proper hex string instead of comma-separated values
       address: tronAddress,
       format: 'Tron'
     };
+    
   } catch (error) {
     throw new Error(`Tron wallet generation failed: ${error.message}`);
   }
 };
 
-// FIXED: Generate XRP wallet
+// FIXED: Generate XRP wallet with proper public key formatting
 const generateXRPWallet = (seed, derivationPath) => {
   try {
-    // Use bip32 for proper derivation
     const root = bip32.fromSeed(seed);
     const child = root.derivePath(derivationPath);
-    
+
     if (!child.privateKey) {
       throw new Error('Failed to derive private key for XRP wallet');
     }
-    
-    // FIXED: Proper hex string conversion
-    const privateKeyHex = child.privateKey.toString('hex');
-    
-    // For XRP, we need compressed public key (33 bytes)
+
+    const privateKeyHex = Buffer.from(child.privateKey).toString('hex');
+
     let publicKeyBuffer = child.publicKey;
-    
-    // If public key is uncompressed (65 bytes), compress it
+
+    // Compress if needed (XRP uses compressed public keys)
     if (publicKeyBuffer.length === 65) {
       if (secp256k1) {
         publicKeyBuffer = secp256k1.publicKeyConvert(publicKeyBuffer, true);
@@ -310,16 +321,17 @@ const generateXRPWallet = (seed, derivationPath) => {
         publicKeyBuffer = Buffer.concat([Buffer.from([prefix]), x]);
       }
     }
+
+    // FIXED: Proper hex string formatting
+    const publicKeyHex = Buffer.from(publicKeyBuffer).toString('hex');
+
     
-    const publicKeyHex = publicKeyBuffer.toString('hex');
-    
-    // Generate XRP address from public key
     const xrpAddress = convertToXRPAddress(publicKeyBuffer);
-    
+
     return {
       blockchain: BLOCKCHAIN_TYPES.XRP,
-      privateKey: '0x' + privateKeyHex,
-      publicKey: '0x' + publicKeyHex,
+      privateKey: privateKeyHex, // Added missing private key
+      publicKey: publicKeyHex, // FIXED: Removed duplicate declaration
       address: xrpAddress,
       format: 'XRP Ledger'
     };
@@ -329,118 +341,42 @@ const generateXRPWallet = (seed, derivationPath) => {
 };
 
 // FIXED: Helper function to convert public key to Tron address
-const convertToTronAddress = (publicKey) => {
+const convertToTronAddress = (publicKeyBuffer) => {
   try {
-    // Check if required dependencies are available
-    if (!keccak256) {
-      throw new Error('Missing js-sha3 dependency for proper Tron address generation');
+    if (!publicKeyBuffer || !Buffer.isBuffer(publicKeyBuffer) || publicKeyBuffer.length < 33) {
+      throw new Error("Invalid public key buffer");
     }
 
-    // Get uncompressed public key
-    let pubKeyBuffer = publicKey;
-    let pubKeyHex = pubKeyBuffer.toString('hex');
-    
-    // Handle compressed public key (33 bytes) - convert to uncompressed
-    if (pubKeyBuffer.length === 33) {
+    // Ensure public key is uncompressed
+    if (publicKeyBuffer.length === 33) {
       if (secp256k1) {
-        pubKeyBuffer = secp256k1.publicKeyConvert(pubKeyBuffer, false);
-        pubKeyHex = pubKeyBuffer.toString('hex');
+        publicKeyBuffer = secp256k1.publicKeyConvert(publicKeyBuffer, false); // uncompressed = 65 bytes
       } else {
-        throw new Error('secp256k1 library required for compressed key conversion');
+        throw new Error("secp256k1 is required to convert compressed public key");
       }
     }
-    
-    // Remove 0x04 prefix if present (uncompressed public key indicator)
-    if (pubKeyHex.startsWith('04')) {
-      pubKeyHex = pubKeyHex.slice(2);
-    }
-    
-    // Use Keccak-256 hash (same as Ethereum)
-    const hash = keccak256(Buffer.from(pubKeyHex, 'hex'));
-    const addressBytes = Buffer.from(hash.slice(-40), 'hex'); // Last 20 bytes
-    
-    // Add Tron prefix (0x41)
-    const tronBytes = Buffer.concat([Buffer.from([0x41]), addressBytes]);
-    
-    // Add checksum (double SHA256)
-    const hash1 = crypto.createHash('sha256').update(tronBytes).digest();
-    const hash2 = crypto.createHash('sha256').update(hash1).digest();
-    const checksum = hash2.slice(0, 4);
-    
-    const addressWithChecksum = Buffer.concat([tronBytes, checksum]);
-    
-    // Base58 encode
-    return base58Encode(addressWithChecksum);
+
+    const uncompressed = publicKeyBuffer.slice(1); // remove 0x04 prefix
+    const hash = keccak256(uncompressed);
+    const addressHex = '41' + hash.slice(-40);
+    return TronWeb.address.fromHex(addressHex);
   } catch (error) {
-    console.warn('Tron address generation fallback used:', error.message);
-    // Enhanced fallback - generate a valid-looking Tron address
-    const hash = crypto.createHash('sha256')
-      .update(publicKey.toString('hex'))
-      .digest();
-    
-    // Create a Tron-like address structure
-    const tronBytes = Buffer.concat([Buffer.from([0x41]), hash.slice(0, 20)]);
-    const hash1 = crypto.createHash('sha256').update(tronBytes).digest();
-    const hash2 = crypto.createHash('sha256').update(hash1).digest();
-    const checksum = hash2.slice(0, 4);
-    const addressWithChecksum = Buffer.concat([tronBytes, checksum]);
-    
-    return base58Encode(addressWithChecksum);
+    console.warn("Tron address generation fallback used:", error.message);
+    return null;
   }
 };
 
 // FIXED: Helper function to convert public key to XRP address
-const convertToXRPAddress = (publicKey) => {
+const convertToXRPAddress = (publicKeyBuffer) => {
   try {
-    let pubKeyBuffer = publicKey;
-    
-    // Ensure we have a compressed public key for XRP
-    if (pubKeyBuffer.length === 65) {
-      // Uncompressed key (65 bytes) - compress it
-      if (secp256k1) {
-        pubKeyBuffer = secp256k1.publicKeyConvert(pubKeyBuffer, true);
-      } else {
-        // Manual compression fallback
-        const x = pubKeyBuffer.slice(1, 33);
-        const y = pubKeyBuffer.slice(33, 65);
-        const prefix = y[31] % 2 === 0 ? 0x02 : 0x03;
-        pubKeyBuffer = Buffer.concat([Buffer.from([prefix]), x]);
-      }
-    } else if (pubKeyBuffer.length === 33) {
-      // Already compressed, use as-is
-    } else {
-      throw new Error('Invalid public key length for XRP address generation');
-    }
-    
-    // XRP address generation: SHA256 then RIPEMD160
-    const hash1 = crypto.createHash('sha256').update(pubKeyBuffer).digest();
-    const hash2 = crypto.createHash('ripemd160').update(hash1).digest();
-    
-    // Add version byte (0x00 for XRP main network)
-    const versionedHash = Buffer.concat([Buffer.from([0x00]), hash2]);
-    
-    // Double SHA256 for checksum
-    const checkHash1 = crypto.createHash('sha256').update(versionedHash).digest();
-    const checkHash2 = crypto.createHash('sha256').update(checkHash1).digest();
-    const checksum = checkHash2.slice(0, 4);
-    
-    // Combine version + hash + checksum
-    const fullAddress = Buffer.concat([versionedHash, checksum]);
-    
-    // Base58 encode to get final XRP address
-    return base58Encode(fullAddress);
+    const sha256 = crypto.createHash("sha256").update(publicKeyBuffer).digest();
+    const ripemd160 = crypto.createHash("ripemd160").update(sha256).digest();
+
+    // This gives correct XRP classic address
+    return encodeAccountID(ripemd160);
   } catch (error) {
-    console.warn('XRP address generation fallback used:', error.message);
-    // Enhanced fallback - generate a valid-looking XRP address
-    const hash1 = crypto.createHash('sha256').update(publicKey).digest();
-    const hash2 = crypto.createHash('ripemd160').update(hash1).digest();
-    const versionedHash = Buffer.concat([Buffer.from([0x00]), hash2]);
-    const checkHash1 = crypto.createHash('sha256').update(versionedHash).digest();
-    const checkHash2 = crypto.createHash('sha256').update(checkHash1).digest();
-    const checksum = checkHash2.slice(0, 4);
-    const fullAddress = Buffer.concat([versionedHash, checksum]);
-    
-    return base58Encode(fullAddress);
+    console.warn("XRP address generation fallback used:", error.message);
+    return null;
   }
 };
 
