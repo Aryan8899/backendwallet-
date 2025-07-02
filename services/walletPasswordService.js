@@ -1,10 +1,45 @@
-// services/walletPasswordService.js - MetaMask-like Implementation
+// services/walletPasswordService.js - Fixed with Primary Wallet Support
 const crypto = require("crypto");
 const jwt = require("jsonwebtoken");
+const fs = require("fs");
+const path = require("path");
 
-// In-memory wallet store
-const wallets = new Map();
+// ✅ PERSISTENT STORAGE - File-based wallet store
+const WALLETS_DIR = path.join(process.cwd(), 'wallets_data');
+const WALLETS_FILE = path.join(WALLETS_DIR, 'wallets.json');
 const JWT_SECRET = process.env.JWT_SECRET || "wallet-secret-key-change-in-production";
+
+// Ensure wallets directory exists
+if (!fs.existsSync(WALLETS_DIR)) {
+  fs.mkdirSync(WALLETS_DIR, { recursive: true });
+}
+
+// ✅ LOAD/SAVE wallet data to persistent storage
+const loadWallets = () => {
+  try {
+    if (fs.existsSync(WALLETS_FILE)) {
+      const data = fs.readFileSync(WALLETS_FILE, 'utf8');
+      return new Map(JSON.parse(data));
+    }
+  } catch (error) {
+    console.error('Error loading wallets:', error.message);
+  }
+  return new Map();
+};
+
+const saveWallets = (wallets) => {
+  try {
+    const data = JSON.stringify([...wallets.entries()], null, 2);
+    fs.writeFileSync(WALLETS_FILE, data, 'utf8');
+    return true;
+  } catch (error) {
+    console.error('Error saving wallets:', error.message);
+    return false;
+  }
+};
+
+// ✅ LOAD wallets from persistent storage on startup
+let wallets = loadWallets();
 
 // ✅ METAMASK-LIKE: Derive encryption key from user's password
 const deriveKeyFromPassword = (password, salt) => {
@@ -46,7 +81,7 @@ const decryptWithPassword = (encryptedData, password) => {
   return decrypted.toString('utf8');
 };
 
-// Password validation (same as your code)
+// Password validation
 const validatePassword = (password) => {
   const minLength = 6;
   const errors = [];
@@ -90,7 +125,48 @@ const calculatePasswordStrength = (password) => {
   return "Strong";
 };
 
-// ✅ METAMASK-LIKE: Import wallet with password-based encryption
+// ✅ NEW: Get primary wallet address
+const getPrimaryWalletAddress = () => {
+  for (const [address, wallet] of wallets.entries()) {
+    if (wallet.isPrimary) {
+      return address;
+    }
+  }
+  return null;
+};
+
+// ✅ NEW: Set primary wallet
+const setPrimaryWallet = (address) => {
+  // Clear all primary flags first
+  for (const [addr, wallet] of wallets.entries()) {
+    wallet.isPrimary = false;
+  }
+  
+  // Set the specified wallet as primary
+  const wallet = wallets.get(address);
+  if (wallet) {
+    wallet.isPrimary = true;
+    saveWallets(wallets);
+    return true;
+  }
+  return false;
+};
+
+// ✅ FIXED: Remove wallet function (was missing!)
+const removeWallet = (address) => {
+  try {
+    if (wallets.has(address)) {
+      wallets.delete(address);
+      return saveWallets(wallets);
+    }
+    return false;
+  } catch (error) {
+    console.error('Error removing wallet:', error.message);
+    return false;
+  }
+};
+
+// ✅ FIXED: Import wallet with PRIMARY flag support
 const importWalletWithPassword = async (walletData, password) => {
   try {
     const { mnemonic, privateKey, address } = walletData;
@@ -105,36 +181,46 @@ const importWalletWithPassword = async (walletData, password) => {
       };
     }
 
-    // Check if wallet already exists
-    if (wallets.has(address)) {
-      return {
-        success: false,
-        message: "Wallet already exists and is password protected"
-      };
-    }
-
     // ✅ ENCRYPT WITH PASSWORD (like MetaMask)
     const encryptedMnemonic = encryptWithPassword(mnemonic, password);
     const encryptedPrivateKey = encryptWithPassword(privateKey, password);
 
-    // Store wallet with encrypted data (NO password hash needed!)
+    // ✅ NEW: Clear other primary flags and set this as primary
+    for (const [addr, wallet] of wallets.entries()) {
+      wallet.isPrimary = false;
+    }
+
+    // Store wallet with encrypted data
     const walletRecord = {
       address: address,
       encryptedMnemonic: encryptedMnemonic,
       encryptedPrivateKey: encryptedPrivateKey,
-      createdAt: new Date(),
+      createdAt: new Date().toISOString(),
       lastAccess: null,
       accessCount: 0,
-      isImported: true
+      isImported: true,
+      isPrimary: true // ✅ NEW: Mark as primary wallet
     };
 
     wallets.set(address, walletRecord);
+    
+    // ✅ SAVE TO PERSISTENT STORAGE
+    const saved = saveWallets(wallets);
+    if (!saved) {
+      // Rollback if save failed
+      wallets.delete(address);
+      return {
+        success: false,
+        message: "Failed to save wallet to persistent storage"
+      };
+    }
 
     return {
       success: true,
       message: "Wallet imported and secured with password",
-      address: address,
-      passwordStrength: passwordValidation.strength
+      address: address, // ✅ IMPORTANT: Return address for frontend
+      passwordStrength: passwordValidation.strength,
+      isPrimary: true
     };
 
   } catch (error) {
@@ -146,7 +232,7 @@ const importWalletWithPassword = async (walletData, password) => {
   }
 };
 
-// ✅ METAMASK-LIKE: Unlock wallet by trying to decrypt with password
+// ✅ FIXED: Unlock wallet with IMPROVED logic
 const unlockWallet = async (addressOrPassword, password) => {
   try {
     let wallet;
@@ -155,19 +241,38 @@ const unlockWallet = async (addressOrPassword, password) => {
 
     // Support both modes: unlockWallet(password) or unlockWallet(address, password)
     if (password === undefined) {
-      // Password-only mode: try to decrypt all wallets
+      // Password-only mode: Use PRIMARY wallet first, then try others
       userPassword = addressOrPassword;
       
-      for (const [addr, walletData] of wallets.entries()) {
+      // ✅ FIRST: Try primary wallet
+      const primaryAddress = getPrimaryWalletAddress();
+      if (primaryAddress) {
+        const primaryWallet = wallets.get(primaryAddress);
         try {
-          // Try to decrypt with this password
-          decryptWithPassword(walletData.encryptedMnemonic, userPassword);
-          wallet = walletData;
-          address = addr;
-          break; // Success! Found the right wallet
+          decryptWithPassword(primaryWallet.encryptedMnemonic, userPassword);
+          wallet = primaryWallet;
+          address = primaryAddress;
         } catch (error) {
-          // Wrong password for this wallet, continue searching
-          continue;
+          // Primary wallet doesn't match password, continue to try others
+        }
+      }
+      
+      // ✅ FALLBACK: If primary didn't work, try all wallets (sorted by creation date)
+      if (!wallet) {
+        const sortedWallets = Array.from(wallets.entries())
+          .sort(([,a], [,b]) => new Date(b.createdAt) - new Date(a.createdAt)); // Newest first
+        
+        for (const [addr, walletData] of sortedWallets) {
+          if (addr === primaryAddress) continue; // Skip primary, already tried
+          
+          try {
+            decryptWithPassword(walletData.encryptedMnemonic, userPassword);
+            wallet = walletData;
+            address = addr;
+            break;
+          } catch (error) {
+            continue;
+          }
         }
       }
       
@@ -178,7 +283,7 @@ const unlockWallet = async (addressOrPassword, password) => {
         };
       }
     } else {
-      // Address + password mode
+      // Address + password mode (most secure)
       address = addressOrPassword;
       userPassword = password;
       wallet = wallets.get(address);
@@ -197,8 +302,11 @@ const unlockWallet = async (addressOrPassword, password) => {
       const privateKey = decryptWithPassword(wallet.encryptedPrivateKey, userPassword);
 
       // Update access info
-      wallet.lastAccess = new Date();
+      wallet.lastAccess = new Date().toISOString();
       wallet.accessCount += 1;
+      
+      // Save updated access info
+      saveWallets(wallets);
 
       // Generate access token
       const accessToken = jwt.sign(
@@ -217,7 +325,8 @@ const unlockWallet = async (addressOrPassword, password) => {
         },
         accessToken: accessToken,
         lastAccess: wallet.lastAccess,
-        accessCount: wallet.accessCount
+        accessCount: wallet.accessCount,
+        isPrimary: wallet.isPrimary || false
       };
 
     } catch (decryptError) {
@@ -273,6 +382,15 @@ const changeWalletPassword = async (address, currentPassword, newPassword) => {
     wallet.encryptedMnemonic = encryptWithPassword(mnemonic, newPassword);
     wallet.encryptedPrivateKey = encryptWithPassword(privateKey, newPassword);
 
+    // Save to persistent storage
+    const saved = saveWallets(wallets);
+    if (!saved) {
+      return {
+        success: false,
+        message: "Failed to save password change"
+      };
+    }
+
     return {
       success: true,
       message: "Wallet password changed successfully",
@@ -288,9 +406,7 @@ const changeWalletPassword = async (address, currentPassword, newPassword) => {
   }
 };
 
-
-
-// Other helper functions (same as your code)
+// Other helper functions
 const getWalletInfo = (address) => {
   const wallet = wallets.get(address);
   if (!wallet) {
@@ -304,7 +420,8 @@ const getWalletInfo = (address) => {
       createdAt: wallet.createdAt,
       lastAccess: wallet.lastAccess,
       accessCount: wallet.accessCount,
-      isImported: wallet.isImported || false
+      isImported: wallet.isImported || false,
+      isPrimary: wallet.isPrimary || false
     }
   };
 };
@@ -343,11 +460,30 @@ const getAllWallets = () => {
       createdAt: wallet.createdAt,
       lastAccess: wallet.lastAccess,
       accessCount: wallet.accessCount,
-      isImported: wallet.isImported || false
+      isImported: wallet.isImported || false,
+      isPrimary: wallet.isPrimary || false
     });
   }
-  return walletList;
+  // Sort by primary first, then by creation date (newest first)
+  return walletList.sort((a, b) => {
+    if (a.isPrimary && !b.isPrimary) return -1;
+    if (!a.isPrimary && b.isPrimary) return 1;
+    return new Date(b.createdAt) - new Date(a.createdAt);
+  });
 };
+
+// ✅ GRACEFUL SHUTDOWN - Save wallets before exit
+process.on('SIGINT', () => {
+  console.log('Saving wallets before shutdown...');
+  saveWallets(wallets);
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  console.log('Saving wallets before shutdown...');
+  saveWallets(wallets);
+  process.exit(0);
+});
 
 module.exports = {
   validatePassword,
@@ -359,6 +495,9 @@ module.exports = {
   isWalletProtected,
   authenticateWallet,
   getAllWallets,
+  removeWallet,
+  getPrimaryWalletAddress, // ✅ NEW
+  setPrimaryWallet, // ✅ NEW
   // Legacy alias
   createWalletWithPassword: importWalletWithPassword
 };

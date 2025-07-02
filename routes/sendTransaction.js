@@ -120,7 +120,7 @@ function getBitcoinAddressFromPrivateKey(privateKeyHex) {
   const cleanPrivateKey = privateKeyHex.replace('0x', '');
   const keyPair = ECPairFactory.fromPrivateKey(Buffer.from(cleanPrivateKey, 'hex'));
   
-  const { address } = bitcoin.payments.p2pkh({ 
+  const { address } = bitcoin.payments.p2wpkh({ 
     pubkey: keyPair.publicKey,
     network: bitcoin.networks.bitcoin 
   });

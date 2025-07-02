@@ -67,14 +67,14 @@ const DERIVATION_PATHS = {
   [BLOCKCHAIN_TYPES.XRP]: "m/44'/144'/0'/0/0"
 };
 
-// Bitcoin network configurations
+// FIXED: Bitcoin network configurations with correct Dogecoin and Litecoin settings
 const BITCOIN_NETWORKS = {
   [BLOCKCHAIN_TYPES.BITCOIN]: bitcoin.networks.bitcoin,
   [BLOCKCHAIN_TYPES.DOGECOIN]: {
     messagePrefix: '\x19Dogecoin Signed Message:\n',
-    bech32: 'dc',
+    bech32: 'dc', // Not actually used for Dogecoin
     bip32: { public: 0x02facafd, private: 0x02fac398 },
-    pubKeyHash: 0x1e,
+    pubKeyHash: 0x1e, // This gives addresses starting with 'D'
     scriptHash: 0x16,
     wif: 0x9e
   },
@@ -82,8 +82,8 @@ const BITCOIN_NETWORKS = {
     messagePrefix: '\x19Litecoin Signed Message:\n',
     bech32: 'ltc1',
     bip32: { public: 0x019da462, private: 0x019d9cfe },
-    pubKeyHash: 0x30,
-    scriptHash: 0x32,
+    pubKeyHash: 0x30, // This gives addresses starting with 'L'
+    scriptHash: 0x32, // This gives addresses starting with 'M'
     wif: 0xb0
   }
 };
@@ -190,7 +190,7 @@ const generateEthereumWallet = (seed, derivationPath) => {
   };
 };
 
-// Generate Bitcoin-like wallets (Bitcoin, Dogecoin, Litecoin)
+// FIXED: Generate Bitcoin-like wallets with proper address formats
 const generateBitcoinLikeWallet = (seed, derivationPath, blockchainType) => {
   try {
     // Create root node from seed using the correct bip32 instance
@@ -207,33 +207,52 @@ const generateBitcoinLikeWallet = (seed, derivationPath, blockchainType) => {
   
     const keyPair = ECPair.fromPrivateKey(privateKeyBuffer, { network });
     
-    // P2PKH address (Legacy format)
-    const p2pkh = payments.p2pkh({ pubkey: keyPair.publicKey, network });
+    let addresses = {};
+    let defaultAddress;
     
-    // P2SH-P2WPKH (SegWit wrapped in P2SH) - only for Bitcoin and Litecoin
-    let p2sh, bech32;
-    if (blockchainType === BLOCKCHAIN_TYPES.BITCOIN || blockchainType === BLOCKCHAIN_TYPES.LITECOIN) {
-      try {
-        const p2wpkh = payments.p2wpkh({ pubkey: keyPair.publicKey, network });
-        p2sh = payments.p2sh({ redeem: p2wpkh, network });
-        bech32 = p2wpkh.address;
-      } catch (segwitError) {
-        // SegWit might not be supported for all networks, continue without it
-        console.warn(`SegWit not supported for ${blockchainType}:`, segwitError.message);
-      }
+    if (blockchainType === BLOCKCHAIN_TYPES.DOGECOIN) {
+      // FIXED: Dogecoin uses P2PKH (legacy) addresses only, starting with 'D'
+      const p2pkh = payments.p2pkh({ pubkey: keyPair.publicKey, network });
+      addresses = {
+        legacy: p2pkh.address,
+        segwit: null,
+        bech32: null
+      };
+      defaultAddress = p2pkh.address;
+      
+    } else if (blockchainType === BLOCKCHAIN_TYPES.LITECOIN) {
+      // FIXED: Litecoin supports multiple formats
+      const p2pkh = payments.p2pkh({ pubkey: keyPair.publicKey, network }); // L addresses
+      const p2wpkh = payments.p2wpkh({ pubkey: keyPair.publicKey, network }); // ltc1 addresses
+      const p2sh = payments.p2sh({ redeem: p2wpkh, network }); // M addresses (P2SH-wrapped SegWit)
+      
+      addresses = {
+        legacy: p2pkh.address,
+        segwit: p2sh.address,
+        bech32: p2wpkh.address
+      };
+      defaultAddress = p2pkh.address; // Use legacy as default
+      
+    } else if (blockchainType === BLOCKCHAIN_TYPES.BITCOIN) {
+      // Bitcoin supports all formats
+      const p2pkh = payments.p2pkh({ pubkey: keyPair.publicKey, network }); // 1 addresses
+      const p2wpkh = payments.p2wpkh({ pubkey: keyPair.publicKey, network }); // bc1 addresses
+      const p2sh = payments.p2sh({ redeem: p2wpkh, network }); // 3 addresses (P2SH-wrapped SegWit)
+      
+      addresses = {
+        legacy: p2pkh.address,
+        segwit: p2sh.address,
+        bech32: p2wpkh.address
+      };
+      defaultAddress = p2wpkh.address; // Use bech32 as default for Bitcoin
     }
     
     return {
       blockchain: blockchainType,
       privateKey: keyPair.toWIF(),
       publicKey: keyPair.publicKey.toString('hex'),
-      addresses: {
-        legacy: p2pkh.address,
-        segwit: p2sh?.address || null,
-        bech32: bech32 || null
-      },
-      // Use legacy as default for compatibility
-      address: p2pkh.address,
+      addresses: addresses,
+      address: defaultAddress,
       format: 'UTXO'
     };
   } catch (error) {
@@ -241,7 +260,7 @@ const generateBitcoinLikeWallet = (seed, derivationPath, blockchainType) => {
   }
 };
 
-// FIXED: Generate Tron wallet (TRX) with proper public key formatting
+// Generate Tron wallet (TRX) with proper public key formatting
 const generateTronWallet = (seed, derivationPath) => {
   try {
     // Use bip32 for proper derivation
@@ -268,12 +287,7 @@ const generateTronWallet = (seed, derivationPath) => {
       }
     }
     
-    // FIXED: Convert public key buffer to proper hex string
     const publicKeyHex = Buffer.from(publicKeyBuffer).toString('hex');
-console.log("✅ HEX:", publicKeyHex);
-
-    console.log("normal is",publicKeyBuffer)
-    console.log("the key is",publicKeyHex)
     
     // Generate Tron address from public key
     const tronWeb = new TronWeb({
@@ -285,7 +299,7 @@ console.log("✅ HEX:", publicKeyHex);
     return {
       blockchain: BLOCKCHAIN_TYPES.TRON,
       privateKey: privateKeyHex, 
-      publicKey: publicKeyHex, // FIXED: Proper hex string instead of comma-separated values
+      publicKey: publicKeyHex,
       address: tronAddress,
       format: 'Tron'
     };
@@ -295,7 +309,7 @@ console.log("✅ HEX:", publicKeyHex);
   }
 };
 
-// FIXED: Generate XRP wallet with proper public key formatting
+// Generate XRP wallet with proper public key formatting
 const generateXRPWallet = (seed, derivationPath) => {
   try {
     const root = bip32.fromSeed(seed);
@@ -322,16 +336,14 @@ const generateXRPWallet = (seed, derivationPath) => {
       }
     }
 
-    // FIXED: Proper hex string formatting
     const publicKeyHex = Buffer.from(publicKeyBuffer).toString('hex');
-
     
     const xrpAddress = convertToXRPAddress(publicKeyBuffer);
 
     return {
       blockchain: BLOCKCHAIN_TYPES.XRP,
-      privateKey: privateKeyHex, // Added missing private key
-      publicKey: publicKeyHex, // FIXED: Removed duplicate declaration
+      privateKey: privateKeyHex,
+      publicKey: publicKeyHex,
       address: xrpAddress,
       format: 'XRP Ledger'
     };
@@ -340,33 +352,7 @@ const generateXRPWallet = (seed, derivationPath) => {
   }
 };
 
-// FIXED: Helper function to convert public key to Tron address
-const convertToTronAddress = (publicKeyBuffer) => {
-  try {
-    if (!publicKeyBuffer || !Buffer.isBuffer(publicKeyBuffer) || publicKeyBuffer.length < 33) {
-      throw new Error("Invalid public key buffer");
-    }
-
-    // Ensure public key is uncompressed
-    if (publicKeyBuffer.length === 33) {
-      if (secp256k1) {
-        publicKeyBuffer = secp256k1.publicKeyConvert(publicKeyBuffer, false); // uncompressed = 65 bytes
-      } else {
-        throw new Error("secp256k1 is required to convert compressed public key");
-      }
-    }
-
-    const uncompressed = publicKeyBuffer.slice(1); // remove 0x04 prefix
-    const hash = keccak256(uncompressed);
-    const addressHex = '41' + hash.slice(-40);
-    return TronWeb.address.fromHex(addressHex);
-  } catch (error) {
-    console.warn("Tron address generation fallback used:", error.message);
-    return null;
-  }
-};
-
-// FIXED: Helper function to convert public key to XRP address
+// Helper function to convert public key to XRP address
 const convertToXRPAddress = (publicKeyBuffer) => {
   try {
     const sha256 = crypto.createHash("sha256").update(publicKeyBuffer).digest();

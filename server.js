@@ -3,6 +3,7 @@ const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
 const { ethers } = require("ethers");
+const { generateEvmWallet, generateBtcWallet, generateTronWallet, generateXrpWallet ,  generateDogeWallet} = require("./services/walletGeneration");
 
 const app = express();
 app.use(cors());
@@ -57,6 +58,71 @@ app.use("/api/wallet/xrp", xrpRoutes);
 app.use("/api/wallet/btc", btcRoutes);
 app.use("/api/wallet/doge", dogeBalanceRoutes);
 app.use("/api/wallet/trx", trxRoutes);
+
+
+// --- Wallet Generation Based on Network ---
+// --- Wallet Generation Based on Network ---
+app.post("/api/wallet/generate-address", async (req, res) => {
+  const { network } = req.body; // 'EVM' or 'Bitcoin' or 'XRP' or 'Tron' or 'Dogecoin'
+
+  if (!network) {
+    return res.status(400).json({ error: "Missing network type" });
+  }
+
+  try {
+    let wallet;
+
+    switch (network.toLowerCase()) {
+      case "evm":
+      case "ethereum":
+      case "eth":
+        wallet = generateEvmWallet();
+        break;
+        
+      case "bitcoin":
+      case "btc":
+        wallet = generateBtcWallet();
+        break;
+        
+      case "xrp":
+      case "ripple":
+        wallet = generateXrpWallet();
+        break;
+        
+      case "tron":
+      case "trx":
+        wallet = await generateTronWallet();
+        break;
+        
+      case "dogecoin":
+      case "doge":
+        wallet = generateDogeWallet();
+        break;
+        
+      default:
+        return res.status(400).json({ 
+          error: "Unsupported network type",
+          supportedNetworks: ["EVM", "Bitcoin", "XRP", "Tron", "Dogecoin"]
+        });
+    }
+
+    res.json({
+      success: true,
+      network: network,
+      address: wallet.address,
+      publicKey: wallet.publicKey,
+      privateKey: wallet.privateKey,
+      ...(wallet.mnemonic && { mnemonic: wallet.mnemonic }) // Include mnemonic if available
+    });
+  } catch (error) {
+    console.error(`Error generating ${network} wallet:`, error);
+    res.status(500).json({ 
+      error: "Failed to generate wallet", 
+      message: error.message,
+      network: network
+    });
+  }
+});
 
 
 // Endpoint to add a custom network
