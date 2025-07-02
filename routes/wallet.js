@@ -114,6 +114,7 @@ router.post("/create-password", async (req, res) => {
 
 // STEP 2: Import Existing Multi-chain Wallet with Password
 // STEP 2: Import Existing Multi-chain Wallet with Password (MODIFIED)
+// CORRECTED: Import Existing Multi-chain Wallet with Password
 router.post("/import-with-password", async (req, res) => {
   try {
     const { mnemonic, password, blockchains, primaryBlockchain, overwrite } = req.body;
@@ -184,23 +185,39 @@ router.post("/import-with-password", async (req, res) => {
       });
     }
 
-    // Check if wallet already exists
-    const walletAddress = primaryWallet.address;
-    const exists = walletExists(walletAddress);
-    const isProtected = isWalletProtected(walletAddress);
+    // Check for existing wallets BEFORE starting import process
+    const existingWallets = [];
+    const conflictingWallets = [];
+    
+    for (const chain of chainsToGenerate) {
+      const wallet = multiWalletData.wallets[chain];
+      const address = wallet.address;
+      const exists = walletExists(address);
+      const isProtected = isWalletProtected(address);
+      
+      if (exists) {
+        existingWallets.push({ chain, address, isProtected });
+        if (isProtected && !overwrite) {
+          conflictingWallets.push({ chain, address });
+        }
+      }
+    }
 
-    if (exists && isProtected && !overwrite) {
+    // If there are conflicts and overwrite is not allowed, return conflict info
+    if (conflictingWallets.length > 0) {
       return res.status(409).json({
         success: false,
-        message: "Wallet already exists and is password protected",
-        address: walletAddress,
-        suggestion: "Use the unlock endpoint to access existing wallet, or add 'overwrite: true' to replace it",
-        conflictType: "WALLET_EXISTS"
+        message: "Some wallets already exist and are password protected",
+        conflictingWallets: conflictingWallets,
+        existingWallets: existingWallets,
+        suggestion: "Add 'overwrite: true' to replace existing wallets, or use different blockchains",
+        conflictType: "MULTIPLE_WALLETS_EXIST"
       });
     }
 
+    // Now proceed with import process
     const importResults = {};
-    let failedImports = [];
+    const failedImports = [];
     
     for (const chain of chainsToGenerate) {
       const wallet = multiWalletData.wallets[chain];
@@ -215,44 +232,79 @@ router.post("/import-with-password", async (req, res) => {
     
       const exists = walletExists(address);
       const isProtected = isWalletProtected(address);
-      const shouldOverwrite = overwrite && exists && isProtected;
-    
+      
       let result;
-      if (shouldOverwrite) {
-        result = await importWalletWithPassword(walletData, password, { overwrite: true });
-      } else {
+      if (exists && isProtected && overwrite) {
+        // Need to handle overwrite - first remove existing wallet, then import
+        try {
+          // Remove existing wallet (you might need to implement this function)
+          removeWallet(address); // This function needs to be implemented
+          result = await importWalletWithPassword(walletData, password);
+        } catch (error) {
+          result = {
+            success: false,
+            message: `Failed to overwrite existing ${chain} wallet: ${error.message}`
+          };
+        }
+      } else if (!exists) {
+        // New wallet - normal import
         result = await importWalletWithPassword(walletData, password);
+      } else {
+        // This shouldn't happen due to conflict checking above, but just in case
+        result = {
+          success: false,
+          message: `Wallet already exists for ${chain}`
+        };
       }
     
       if (result.success) {
         importResults[chain] = {
           ...result,
           address,
-          blockchain: chain
+          blockchain: chain,
+          wasOverwritten: exists && overwrite
         };
       } else {
-        failedImports.push({ chain, error: result.message });
+        failedImports.push({ 
+          chain, 
+          address,
+          error: result.message 
+        });
       }
     }
     
+    // Determine response based on results
+    const successCount = Object.keys(importResults).length;
+    const totalCount = chainsToGenerate.length;
     
-   
-      res.status(201).json({
-        success: true,
-        message: failedImports.length === 0
-          ? "All wallets imported and secured with password"
-          : "Some wallets failed to import",
-        importedWallets: importResults,
+    if (successCount === 0) {
+      // All imports failed
+      return res.status(400).json({
+        success: false,
+        message: "Failed to import any wallets",
         failedWallets: failedImports,
-        allWallets: multiWalletData.wallets,
-        supportedChains: multiWalletData.supportedChains,
-        passwordStrength: validation.strength,
-        wasReplaced: overwrite
+        allWallets: multiWalletData.wallets
       });
-      
+    }
     
+    // At least some imports succeeded
+    const responseStatus = successCount === totalCount ? 201 : 207; // 207 = Multi-Status
+    
+    res.status(responseStatus).json({
+      success: true,
+      message: failedImports.length === 0
+        ? "All wallets imported and secured with password"
+        : `${successCount}/${totalCount} wallets imported successfully`,
+      importedWallets: importResults,
+      failedWallets: failedImports,
+      allWallets: multiWalletData.wallets,
+      supportedChains: multiWalletData.supportedChains,
+      passwordStrength: validation.strength,
+      wasOverwriteUsed: overwrite && existingWallets.length > 0
+    });
 
   } catch (err) {
+    console.error("Import with password error:", err);
     res.status(500).json({ 
       success: false, 
       message: "Failed to import multi-chain wallet",

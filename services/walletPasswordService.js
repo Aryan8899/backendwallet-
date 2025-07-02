@@ -288,6 +288,8 @@ const changeWalletPassword = async (address, currentPassword, newPassword) => {
   }
 };
 
+
+
 // Other helper functions (same as your code)
 const getWalletInfo = (address) => {
   const wallet = wallets.get(address);
