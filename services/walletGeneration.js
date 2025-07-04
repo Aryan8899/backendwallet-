@@ -75,9 +75,14 @@ function generateXrpWallet() {
     // Method 1: Try ripple-keypairs (correct usage)
     try {
       const rippleKeypairs = require('ripple-keypairs');
-      const seed = rippleKeypairs.generateSeed();
-      const keypair = rippleKeypairs.deriveKeypair(seed);
-      const address = rippleKeypairs.deriveAddress(keypair.publicKey);
+      const seed = rippleKeypairs.generateSeed(); // Generate seed
+      const keypair = rippleKeypairs.deriveKeypair(seed); // Derive keypair
+      const address = rippleKeypairs.deriveAddress(keypair.publicKey); // Derive address from public key
+
+      console.log('Generated XRP Wallet from ripple-keypairs:');
+      console.log('Address:', address);
+      console.log('Private Key:', keypair.privateKey);
+      console.log('Public Key:', keypair.publicKey);
 
       return {
         address,
@@ -91,8 +96,13 @@ function generateXrpWallet() {
       // Method 2: Try xrpl library
       try {
         const xrpl = require('xrpl');
-        const wallet = xrpl.Wallet.generate();
+        const wallet = xrpl.Wallet.generate(); // Generate wallet using xrpl
         
+        console.log('Generated XRP Wallet from xrpl:');
+        console.log('Address:', wallet.address);
+        console.log('Private Key:', wallet.privateKey);
+        console.log('Public Key:', wallet.publicKey);
+
         return {
           address: wallet.address,
           privateKey: wallet.privateKey,
@@ -104,8 +114,8 @@ function generateXrpWallet() {
     }
   } catch (error) {
     console.error('XRP wallet generation error:', error);
-    
-    // Fallback: Generate XRP-like address
+
+    // Fallback: Generate XRP-like address (simplified, not recommended for production)
     const privateKeyBuffer = crypto.randomBytes(32);
     const privateKeyHex = privateKeyBuffer.toString('hex');
     
@@ -113,6 +123,9 @@ function generateXrpWallet() {
     const addressHash = crypto.createHash('sha256').update(privateKeyBuffer).digest('hex');
     const xrpAddress = `r${addressHash.slice(0, 33)}`;
     
+    console.log('Fallback XRP-like address:', xrpAddress);
+    console.log('Private Key:', privateKeyHex);
+
     return {
       address: xrpAddress,
       privateKey: privateKeyHex,
@@ -121,6 +134,7 @@ function generateXrpWallet() {
     };
   }
 }
+
 
 async function generateTronWallet() {
   try {

@@ -3,6 +3,7 @@ const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
 const { ethers } = require("ethers");
+const cryptoRoutes = require('./routes/cryptoRoutes');
 const { generateEvmWallet, generateBtcWallet, generateTronWallet, generateXrpWallet ,  generateDogeWallet} = require("./services/walletGeneration");
 
 const app = express();
@@ -35,7 +36,7 @@ const bscTransactionRoutes = require('./routes/bscTransactions');
 const trxTransactionRoutes = require('./routes/trxTransactions');
 const xrpTransactionRoutes = require('./routes/xrpTransactions');
 const dogeTransactionRoutes = require('./routes/dogeTransactions');
-
+const estimateFeesRoutes = require('./routes/estimateFees');
 const universalTransactionRouter = require('./routes/sendTransaction');
 
 
@@ -58,6 +59,9 @@ app.use("/api/wallet/xrp", xrpRoutes);
 app.use("/api/wallet/btc", btcRoutes);
 app.use("/api/wallet/doge", dogeBalanceRoutes);
 app.use("/api/wallet/trx", trxRoutes);
+app.use('/api/fees', estimateFeesRoutes);
+
+app.use('/api/crypto', cryptoRoutes);
 
 
 // --- Wallet Generation Based on Network ---

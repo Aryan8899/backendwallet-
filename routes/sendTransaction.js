@@ -69,6 +69,7 @@ async function sendEVMTransaction(network, privateKey, to, amount, gasPrice = nu
 
     const provider = new ethers.JsonRpcProvider(networkConfig.rpcUrl);
     const wallet = new ethers.Wallet(privateKey, provider);
+    
 
     // Prepare transaction object
     const txData = {

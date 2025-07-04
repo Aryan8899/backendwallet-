@@ -46,6 +46,12 @@ const cleanupExpiredSetups = () => {
   }
 };
 
+const generateUniqueSetupId = () => {
+  const timestamp = Date.now().toString(36);
+  const random = crypto.randomBytes(8).toString('hex');
+  return `${timestamp}-${random}`;
+};
+
 // Clean up expired setups every 5 minutes
 setInterval(cleanupExpiredSetups, 5 * 60 * 1000);
 
@@ -87,13 +93,37 @@ router.post("/create-password", async (req, res) => {
         ].filter(chain => isValidBlockchainType(chain));
     
     const multiWalletData = generateMultiChainWallet(chainsToGenerate);
+
+
+    const walletsWithPrivateKey = {};
+    chainsToGenerate.forEach((chain) => {
+      const wallet = multiWalletData.wallets[chain];
+      walletsWithPrivateKey[chain] = {
+        address: wallet.address,
+        privateKey: wallet.privateKey,  // Adding private key
+        blockchain: chain
+      };
+    });
+
     const primaryChain = chainsToGenerate.includes(BLOCKCHAIN_TYPES.ETHEREUM) 
       ? BLOCKCHAIN_TYPES.ETHEREUM 
       : chainsToGenerate[0];
     const primaryWallet = multiWalletData.wallets[primaryChain];
     
     // Generate temporary setup ID
-    const setupId = crypto.randomBytes(16).toString('hex');
+    let setupId = generateUniqueSetupId();
+let retries = 0;
+while (pendingSetups.has(setupId) && retries < 10) {
+  setupId = generateUniqueSetupId();
+  retries++;
+}
+
+if (retries === 10) {
+  return res.status(500).json({
+    success: false,
+    message: "Failed to generate unique setup ID. Please try again."
+  });
+}
     
     // Store setup data temporarily
     pendingSetups.set(setupId, {
@@ -121,12 +151,13 @@ router.post("/create-password", async (req, res) => {
         setupId: setupId,
         primaryWallet: {
           address: primaryWallet.address,
+          privateKey: primaryWallet.privateKey, 
           blockchain: primaryChain
         },
         allWallets: Object.fromEntries(
           Object.entries(multiWalletData.wallets).map(([chain, wallet]) => [
             chain, 
-            { address: wallet.address, blockchain: chain }
+            { address: wallet.address, privateKey: wallet.privateKey, blockchain: chain }
           ])
         ),
         supportedChains: multiWalletData.supportedChains
@@ -448,6 +479,123 @@ router.post("/confirm-seed-phrase", async (req, res) => {
     res.status(500).json({ 
       success: false, 
       message: "Failed to confirm seed phrase",
+      error: err.message 
+    });
+  }
+});
+
+
+router.post("/change-password", async (req, res) => {
+  try {
+    const { address, currentPassword, newPassword, confirmNewPassword } = req.body;
+
+    // Validate required fields
+    if (!address || !currentPassword || !newPassword || !confirmNewPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "All fields are required",
+        required: ["address", "currentPassword", "newPassword", "confirmNewPassword"]
+      });
+    }
+
+    // Check if wallet exists
+    if (!walletExists(address)) {
+      return res.status(404).json({
+        success: false,
+        message: "❌ Wallet not found",
+        address: address
+      });
+    }
+
+    // Check if wallet is password protected
+    if (!isWalletProtected(address)) {
+      return res.status(400).json({
+        success: false,
+        message: "❌ Wallet is not password protected",
+        suggestion: "Use /import-with-password to add password protection"
+      });
+    }
+
+    // Validate new password confirmation
+    if (newPassword !== confirmNewPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "❌ New passwords do not match",
+        error: "PASSWORD_MISMATCH"
+      });
+    }
+
+    // Validate new password strength
+    const validation = validatePassword(newPassword);
+    if (!validation.isValid) {
+      return res.status(400).json({
+        success: false,
+        message: "New password does not meet requirements",
+        errors: validation.errors,
+        requirements: {
+          minLength: "At least 8 characters",
+          uppercase: "At least one uppercase letter",
+          lowercase: "At least one lowercase letter", 
+          number: "At least one number",
+          special: "At least one special character"
+        }
+      });
+    }
+
+    // Check if new password is same as current password
+    if (currentPassword === newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "❌ New password must be different from current password",
+        error: "SAME_PASSWORD"
+      });
+    }
+
+    // Verify current password by unlocking wallet
+    const unlockResult = await unlockWallet(address, currentPassword);
+    if (!unlockResult.success) {
+      return res.status(401).json({
+        success: false,
+        message: "❌ Current password is incorrect",
+        error: "INVALID_CURRENT_PASSWORD"
+      });
+    }
+
+    // Change password using the wallet service
+    const changeResult = await changeWalletPassword(address, currentPassword, newPassword);
+    
+    if (changeResult.success) {
+      res.json({
+        success: true,
+        message: "🔐 Password changed successfully!",
+        wallet: {
+          address: address,
+          updatedAt: new Date().toISOString()
+        },
+        security: {
+          passwordStrength: validation.strength,
+          isEncrypted: true,
+          previousPasswordInvalidated: true
+        },
+        instructions: {
+          status: "✅ Your wallet password has been updated",
+          nextStep: "Use your new password to unlock your wallet",
+          important: "🔒 Previous password is no longer valid"
+        }
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        message: "❌ Failed to change password",
+        error: changeResult.message || "Unknown error during password change"
+      });
+    }
+
+  } catch (err) {
+    console.error("Change password error:", err);
+    res.status(500).json({ 
+      success: false, 
+      message: "Failed to change password",
       error: err.message 
     });
   }
