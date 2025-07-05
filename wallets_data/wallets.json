@@ -386,6 +386,123 @@
       "lastAccess": "2025-07-03T11:31:07.108Z",
       "accessCount": 3,
       "isImported": true,
+      "isPrimary": false
+    }
+  ],
+  [
+    "0x9a064e17e463382cd777562297921073b43c2c59",
+    {
+      "address": "0x9a064e17e463382cd777562297921073b43c2c59",
+      "encryptedMnemonic": "55110c491d2415deacaf0bd04025997f:cc7f777ea6151aced1f46635:b350b702e5acb54f1392727458e1e7f62d5263cc738e76c0f06c51e69e0093b41184dc2b3ca8b8f66eef3739308e1d160610e889e31a759585c6d9d2f79bfc072074090b532826ee28ae91:f1b754fbfac4253cfc4091977ee63076",
+      "encryptedPrivateKey": "3c531cb678af11fb40e443ee2ee2b2eb:1ea9420348c65a01de9d0276:997f99a83d33d939bcab775f30505f7f37c16e77827fb32af0131dec34862bb54bec3d220c3f534c54e807eeebbd4e326470ce3e61acc6dae15a30fd6efccaad6a15:77c049fe8a458a1427389888028e7cdd",
+      "createdAt": "2025-07-05T10:48:24.737Z",
+      "lastAccess": null,
+      "accessCount": 0,
+      "isImported": true,
+      "isPrimary": false
+    }
+  ],
+  [
+    "0x930f63dcfbef878dcca1f5bc2d0caca59959dde1",
+    {
+      "address": "0x930f63dcfbef878dcca1f5bc2d0caca59959dde1",
+      "encryptedMnemonic": "6a60b71ba0e2f675ce4efa56eee6b025:636a4e770cce6db5a6b01603:54f2b4bd37318aba2c890e3df5ee130970737d6f721ded1095943eb2f8d385bb4bad922f2aa88e5078d28814cfac1982f586056186337804589a4cd3111c31e7bd19a49c0a445d5af8ce:88e1c3f7015d3c88b861a1f03013137f",
+      "encryptedPrivateKey": "a0c0563ec3c0e86142e31ce63d7ca4ff:34e07ac2638a7888fd53a05c:252653a15fc56b2f6f0fb65e394662c5c86006202c2c2c0de958e4401ddd16d99ee973795b56532907a9cb64669534ec6b87f445fcd3cb93ca195c8cf3d9c1862825:9e5cd5e89d9d18610a6262f90a21d7bb",
+      "createdAt": "2025-07-05T10:59:55.464Z",
+      "lastAccess": null,
+      "accessCount": 0,
+      "isImported": true,
+      "isPrimary": false
+    }
+  ],
+  [
+    "0xf5aa921c8a69d730ee22c948aeb0d4d9c30e4abe",
+    {
+      "address": "0xf5aa921c8a69d730ee22c948aeb0d4d9c30e4abe",
+      "encryptedMnemonic": "747f937809d06712d823d22d4279ca5a:c4a914724a0b0c286b7f9f29:b7db83b544cc6cf2a3b905c8bb67b3fd777ddafceeba9b595e9e26548dd98b464084d5bf316193fcef47ff24b3b75039f97e2304b72d9a8c9e04b5dbb91368f3e903787e5eb342d61da0b8:72ee179445880c07068ff56b0c0478f5",
+      "encryptedPrivateKey": "6c26d72385053cecee530b306b8cc374:e3f91ff62f5671369e65d03d:c08afe68b9bfd463b95c2fb25378d67325dd24bffa926d39da418394f134dd7e183a5a9a3812972cfd40367fd7103750283500087e233bfbac49c4179a29c6fdf1ce:ac0517c789a01ed494576d73d9b1d623",
+      "createdAt": "2025-07-05T13:00:32.769Z",
+      "lastAccess": null,
+      "accessCount": 0,
+      "isImported": true,
+      "isPrimary": false
+    }
+  ],
+  [
+    "0x45437f8408acb4229c131dc30d0a141c941d098c",
+    {
+      "address": "0x45437f8408acb4229c131dc30d0a141c941d098c",
+      "encryptedMnemonic": "1ac8cf3a67bdd9f318b22972161dc6c3:a7bff3ec3bdf2105b596f0e7:ccdf04dd1846dd1e4d97df7e8faf822dcd9a097812fd01e050841abb8b378d47d7d24ef85f3f07d16cd51ed617092f92b56246072d450efc9dcfa3192e9a00647e04ba528804bb00c81917296a9d393afdfa:9dff8cfd7418591166eb8626fbb0219d",
+      "encryptedPrivateKey": "d77b9e5298064a2fe6412d9bd0b58b54:c6f566f5b7f016bd94b0998a:6bc74675a04dac82dac7221ac480fccec3027393fa5fa5b14ce4ed74b596250c22d4ccaee778518d98e9300f9144769ff8bdcd63be184003fde700be5418dbe986e1:1fea1dbc696a01af970a8b868697878b",
+      "createdAt": "2025-07-05T13:13:25.790Z",
+      "lastAccess": null,
+      "accessCount": 0,
+      "isImported": true,
+      "isPrimary": false
+    }
+  ],
+  [
+    "0xef73d00b63d2d80544cf764acda8aaecd231c9c8",
+    {
+      "address": "0xef73d00b63d2d80544cf764acda8aaecd231c9c8",
+      "encryptedMnemonic": "8b3d5497bc9640faad9fae0609362fd0:0b2e1a1c0a5a090084be36d3:9aedc92374655fea91b1c098829de7bd3ac2f84e6060945aa5a73dc482ee549ac59ae8f8d6449f65e1cf6ed453fc95e018b9a6677b35bd5decd601f46803d8e05898a2a5:19fcfbc7032536b8053313017b045f1f",
+      "encryptedPrivateKey": "3d4e56ae8550068d2705497337fac971:39f6413abbf175931bbbff09:cf876154184704ff102eedc6deaea9deafe8506f23e4e23d3504c277fc031f4de5f97d3684852d5f6d3e1b1dca0a2143ca3886639c4bf46b8341d0fbc024c7cfe561:5db4555f1f128a34b0f24f6d851494aa",
+      "createdAt": "2025-07-05T13:24:50.623Z",
+      "lastAccess": null,
+      "accessCount": 0,
+      "isImported": true,
+      "isPrimary": false
+    }
+  ],
+  [
+    "0x4b912de0c5c139f8ad9d5341680dc914e12b68bb",
+    {
+      "address": "0x4b912de0c5c139f8ad9d5341680dc914e12b68bb",
+      "encryptedMnemonic": "3d3760d99855ff6b320fdf475e424945:b4d381eecbdd6caaa74105bb:5e6f053c6ca611feb7e99660ac1a25cd26e45e69f8b50d8647d1a03420a88f46afc6a68b5abdfdbda842e675cb9e2c25e1b6945e92ed3fe12338667adeb31cc2bb18821629c2ce1763dfd36761:2c398309f8c02d82040e73a1108aebf3",
+      "encryptedPrivateKey": "a7295a86fdee1887ecb4fba64f143cd3:3855f4ce9918243d93f624c0:c0be89e7575081ba3ec1a19b99736920f846d3075f00886325cdf5ab909a8144b1b2c57183a1232f8b96e08ba07f520c57395fac87cf32e341e2459a0d6391909e52:4b46dc562db4f64813017c0e7ad3e265",
+      "createdAt": "2025-07-05T13:34:38.040Z",
+      "lastAccess": null,
+      "accessCount": 0,
+      "isImported": true,
+      "isPrimary": false
+    }
+  ],
+  [
+    "0x1e8fc6dd008736a5aab3b7a82f8a5497ca229814",
+    {
+      "address": "0x1e8fc6dd008736a5aab3b7a82f8a5497ca229814",
+      "encryptedMnemonic": "7dbde9032254981163c8ee39a7b81360:5cf3750584e0a17a3e01797a:1123e5d525b85c51b9e5da19315a5a6f406869574bec60b6d161f933cbb1181d8bee2518c083f16fe999ec3bea90a81f3a3e44f9882bba5437c7b839bfab8e365b37ab40823da184e1e9919bcdfb36f1aa:a41d3e46d68592a975c896b90b0a8027",
+      "encryptedPrivateKey": "453e22fb40825a28d49d550de38cf89f:f5c6b535d40b93a301442008:06c9ec66c44bdb6d3a39c8a32884eda03a5482b3d82a59a1f883de3bd08af317fffec3c039ad0422f29fb970e9faffb731cdd33fa7ee8505c91050ede24e02161210:034871b336c6a0338918f0ae185505a7",
+      "createdAt": "2025-07-05T13:45:43.807Z",
+      "lastAccess": null,
+      "accessCount": 0,
+      "isImported": true,
+      "isPrimary": false
+    }
+  ],
+  [
+    "0xbcbc085ac66baec7e92277938842acbb1defe332",
+    {
+      "address": "0xbcbc085ac66baec7e92277938842acbb1defe332",
+      "encryptedMnemonic": "538857d4a12d88d349edb62512e9afd5:fc87dec881aedcede1a93d58:ee6aaea1f00f6f671e7d7bd0288e3421e009af910497d35467e19f4d71c1c27ca0480e9f7dd171770a9fa1db26433a9c5dd31a36eb39e874cdffd8ea0c32b3673568:b342ddb4c414ee64d79cf21cac06feec",
+      "encryptedPrivateKey": "7cb43ed43b952ab2d6eb6ed84aa35337:884a5ffa5fcf2b73b738024b:6e6c4b8a82127526bbbad6aa85b35aed3dc82322ced611af4df98495809fdcd0fbb5098c92e3ba7f8fe6c02c9097f778762d0a192359d091f286600fe24f61f73d17:6a75bdd90a6e29e3c3b0679e7993fbfb",
+      "createdAt": "2025-07-05T15:23:21.715Z",
+      "lastAccess": null,
+      "accessCount": 0,
+      "isImported": true,
+      "isPrimary": false
+    }
+  ],
+  [
+    "0xbcfdd8f2b12c78c7daf5720ef34beb2e4a8c190a",
+    {
+      "address": "0xbcfdd8f2b12c78c7daf5720ef34beb2e4a8c190a",
+      "encryptedMnemonic": "78f74cea30a934ec7d3338ab6364c0fd:f285070a39c877a18ac46537:8c95ca12e1e81ba61108c98979bfd2dd7bed12d0562821ea0785b1b66a4c9305f982e17d19355d5db7978a797de560f74b9ee17f0460a00f7168e2c4ed510ed6d30f3da243b8117f65:744b7dd579d6d85b2f2cdb3863299b18",
+      "encryptedPrivateKey": "bd170b0408dcdd1f7769b2521b6a05dc:740b6edc23047593f1682e3a:d3e3361d049461c26219e0cedb7880a7e02255a8aedff5024d5ae1b9a74bd6b5ad950fd848c8734c310517f35d06deffc904e307bebcc31c95a28226d296aa224c7e:9de7c6f28800beb9d45b0d4902e84f21",
+      "createdAt": "2025-07-05T15:55:46.312Z",
+      "lastAccess": null,
+      "accessCount": 0,
+      "isImported": true,
       "isPrimary": true
     }
   ]
